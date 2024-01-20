@@ -8,39 +8,17 @@ function [CFC] = ft_pfc(cfg,FT)
     % 处理 ================================================================
     
     cfg  = ft_checkopt(cfg,'toi','ascendingdoublevector');
-
-    % 模式：探索性分析explore/验证性分析valid
-    cfg.mode = ft_getopt(cfg,'mode',"explore"); % ft_getopt的key必须是char，不能是str
+            
+    cfg = ft_checkconfig(cfg, 'required',  {'bandphase','bandfreq','toi'});
     
-    switch(cfg.mode)
-        case {"explore","Explore"}
-            disp("【AEC】探索性分析");
-            disp("对于对应通道的所有时刻，计算各频段两两之间的试次间包络相关");
-            
-            cfg = ft_checkconfig(cfg, 'required',  {'foi','fwidth','toi'});
+    cfg  = ft_checkopt(cfg,'bandphase', 'ascendingdoublebivector'); % 带通滤波的[下限, 上限]
+    cfg  = ft_checkopt(cfg,'bandfreq', 'ascendingdoublebivector');
+    cfg  = ft_checkopt(cfg,'toi','ascendingdoublebivector');
 
-            cfg  = ft_checkopt(cfg,'toi','ascendingdoublebivector'); % 探索模式下，toi只能是一个range，否则矩阵维度太高了
-            cfg  = ft_checkopt(cfg,'foi','ascendingdoublevector');
-            cfg  = ft_checkopt(cfg,'fwidth','numericscalar');
-            
-            CFC = getAEC_explore(cfg,FT_1,FT_2);
-            
-        
-        case {"valid","Valid"}
-            disp("【AEC】验证性分析");
-            disp("对于数据集的对应通道，计算逐时刻的试次间包络相关");
-            
-            cfg = ft_checkconfig(cfg, 'required',  {'bandphase','bandfreq','toi'});
-            
-            cfg  = ft_checkopt(cfg,'bandphase', 'ascendingdoublebivector'); % 带通滤波的[下限, 上限]
-            cfg  = ft_checkopt(cfg,'bandfreq', 'ascendingdoublebivector');
-            cfg  = ft_checkopt(cfg,'toi','ascendingdoublebivector');
-
-            if(nargout==0)
-                getPFC_valid(cfg,FT);
-            else
-                CFC = getPFC_valid(cfg,FT);
-            end
+    if(nargout==0)
+        getPFC_valid(cfg,FT);
+    else
+        CFC = getPFC_valid(cfg,FT);
     end
 
 end
