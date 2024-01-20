@@ -16,15 +16,15 @@ function [CFC] = ft_pfc(cfg,FT)
     cfg  = ft_checkopt(cfg,'toi','ascendingdoublebivector');
 
     if(nargout==0)
-        getPFC_valid(cfg,FT);
+        getPFC(cfg,FT);
     else
-        CFC = getPFC_valid(cfg,FT);
+        CFC = getPFC(cfg,FT);
     end
 
 end
 
 
-function [PFC] = getPFC_valid(cfg,FT)
+function [PFC] = getPFC(cfg,FT)
     
     cfg_get         = [];
     cfg_get.latency = cfg.toi;
