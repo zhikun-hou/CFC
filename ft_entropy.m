@@ -4,39 +4,70 @@ function [Entropy] = ft_entropy(cfg,FT)
 
     FT  = ft_checkdata(FT,'datatype','raw','feedback','yes');
     
-    cfg_select = [];
-
-    cfg_select.trials  = ft_getopt(cfg,'trials',1:numel(FT.trial));
-    cfg_select.channel = ft_getopt(cfg,'channel',1:numel(FT.label));
-
-    cfg = ft_checkopt(cfg,'timerange' ,'ascendingdoublebivector');
-    cfg_select.latency = cfg.timerange;
+    cfg.trials  = ft_getopt(cfg,'trials',1:numel(FT.trial));
+    cfg.channel = ft_getopt(cfg,'channel',1:numel(FT.label));
+    cfg.latency = ft_getopt(cfg,'timerange','minperiod'); % 默认使用所有试次中最短的试次对所有试次进行截取
     
-    FT = ft_selectdata(cfg_select,FT);
+    FT = ft_selectdata(cfg,FT);
 
     % 检查公共设置 =========================================================
 
     cfg  = ft_checkopt(cfg,'method','char');
 
     cfg.embedding = ft_getopt(cfg,'embedding',3);
+    cfg.scale = ft_getopt(cfg,'scale',1);
+    cfg = ft_checkopt(cfg,'scale','ascendingdoublevector'); % 如果是向量，那就进行多尺度分析
+    if(cfg.scale(1)<1)
+        ft_error("多尺度分析时，尺度设置应当>=1");
+    end
+    if(any(mod(cfg.scale,1)~=0))
+        ft_error("多尺度分析时，尺度应当为整数");
+    end
 
     % 如果没有指定是否可视化，并且nargout为0，那就自动执行可视化
     cfg.visualize = ft_getopt(cfg,'visualize',nargout==0);
 
     % 执行 ================================================================
     
-    switch(cfg.method)
-        case {'approximate','Approximate'} % 近似熵
-            Entropy = getApproximateEntropy(cfg,FT);
-        case {'sample','Sample'} % 样本熵，对近似熵的改进
-            Entropy = getSampleEntropy(cfg,FT);
-        case {'fuzzy','Fuzzy'} % 模糊熵，对样本熵的改进
-            Entropy = getFuzzyEntropy(cfg,FT);
-        case {'permutation','Permutation'} % 排列熵
-            Entropy = getPermutationEntropy(cfg,FT);
-        otherwise
-            ft_error("未知的熵计算方法");
+    N_scale = numel(cfg.scale);
+    ft_progress('init','etf');
+    for k=1:N_scale
+        % 注意，scale是去掉中心后的窗口半长
+        win = cfg.scale(k)*2+1;
+        
+        ft_progress(k/N_scale,'正在处理尺度(%d/%d)', k, N_scale);
+        
+        % 变换尺度 ------------------------------
+        
+        FT_temp = FT;
+        if(win~=3)
+            for i=1:numel(FT.trial)
+                % movmean没有strade，只能用这个了
+                FT_temp.trial{i} = matlab.tall.movingWindow(@mean,win,FT.trial{i}','Stride',win)';
+                FT_temp.time{i}  = matlab.tall.movingWindow(@mean,win,FT.time{i}','Stride',win)';
+            end
+        end
+
+        % 计算尺度下的熵 ------------------------
+
+        switch(cfg.method)
+            case {'approximate','Approximate'} % 近似熵
+                E = getApproximateEntropy(cfg,FT_temp);
+            case {'sample','Sample'} % 样本熵，对近似熵的改进
+                E = getSampleEntropy(cfg,FT_temp);
+            case {'fuzzy','Fuzzy'} % 模糊熵，对样本熵的改进
+                E = getFuzzyEntropy(cfg,FT_temp);
+            case {'permutation','Permutation'} % 排列熵
+                E = getPermutationEntropy(cfg,FT_temp);
+            otherwise
+                ft_error("未知的熵计算方法");
+        end
+
+        E.scale = win;
+        Entropy(k) = E;
     end
+
+    ft_progress('close');
 
 end
 
@@ -47,7 +78,7 @@ function [E] = getFuzzyEntropy(cfg,FT)
     N_dimension    = cfg.embedding;
 
     E          = [];
-    E.method   = "Fuzzy";
+    E.method   = "FuzzyEntropy";
     E.channels = 1:N_channel;
     E.trials   = 1:N_trial;
 
@@ -105,7 +136,7 @@ function [E] = getFuzzyEntropy(cfg,FT)
     E.Entropy   = Entropy;
 
     if(cfg.visualize)
-        figure("Name","ApproximateEntropy");
+        figure("Name","FuzzyEntropy");
         imagesc(E.trials,E.channels,E.Entropy);
         colormap(hot);
         colorbar;
@@ -121,7 +152,7 @@ function [E] = getSampleEntropy(cfg,FT)
     N_dimension    = cfg.embedding;
 
     E          = [];
-    E.method   = "Sample";
+    E.method   = "SampleEntropy";
     E.channels  = cfg.channel;
     E.trials    = cfg.trials;
 
@@ -173,7 +204,7 @@ function [E] = getSampleEntropy(cfg,FT)
     E.Entropy   = Entropy;
 
     if(cfg.visualize)
-        figure("Name","ApproximateEntropy");
+        figure("Name","SampleEntropy");
         imagesc(E.trials,E.channels,E.Entropy);
         colormap(hot);
         colorbar;
@@ -188,7 +219,7 @@ function [E] = getApproximateEntropy(cfg,FT)
     N_dimension    = cfg.embedding;
 
     E          = [];
-    E.method   = "Approximate";
+    E.method   = "ApproximateEntropy";
     E.channels  = cfg.channel;
     E.trials    = cfg.trials;
 
@@ -261,7 +292,7 @@ function [E] = getPermutationEntropy(cfg,FT)
     N_dimension    = cfg.embedding;
 
     E           = [];
-    E.method    = "Permutation";
+    E.method    = "PermutationEntropy";
     E.channels  = cfg.channel;
     E.trials    = cfg.trials;
     
